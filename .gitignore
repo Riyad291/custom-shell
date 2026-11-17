@@ -1,0 +1,26 @@
+# compiled output
+*.o
+*.a
+customshell
+_template/command
+
+# per-command binaries (named after their folder)
+loganalyzer/loganalyzer
+iotracker/iotracker
+netstatplus/netstatplus
+filecrypt/filecrypt
+processgroup/processgroup
+sharedmempipe/sharedmempipe
+timedexec/timedexec
+filediffadvanced/filediffadvanced
+
+# test fixtures: these get large, never commit them
+*.log
+**/tests/*.log
+**/tests/shell_sim
+
+# editors / OS
+*.swp
+*~
+.vscode/
+.DS_Store

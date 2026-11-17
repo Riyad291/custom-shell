@@ -1,0 +1,123 @@
+.TH LOGANALYZER 1 "November 2026" "Custom Shell 1.0" "User Commands"
+.SH NAME
+loganalyzer \- parse large log files with mmap and report statistics
+.SH SYNOPSIS
+.B loganalyzer
+.BI \-f " file"
+[
+.BI \-p " pattern"
+] [
+.BI \-l " level"
+] [
+.BI \-t " n"
+] [
+.BI \-k " field"
+] [
+.B \-c
+] [
+.B \-v
+] [
+.B \-h
+]
+.SH DESCRIPTION
+.B loganalyzer
+maps a log file into memory with
+.BR mmap (2)
+and scans it in a single pass, without copying the file into a user-space
+buffer. It reports the total number of lines and bytes, a count for each log
+level, the most frequent client addresses or request paths, and the elapsed
+scan time.
+.PP
+Because the file is mapped rather than read, pages the kernel already holds
+in its page cache are placed directly into the address space of the process,
+so no copy is made between kernel and user space. Line endings are located
+with
+.BR memchr (3)
+and each line is processed in place, through a pointer into the mapping.
+.PP
+The input is expected to be in common log format, for example:
+.PP
+.RS
+192.168.1.5 \- \- [12/Nov/2026:09:14:03] "GET /api/users HTTP/1.1" 200 1234 INFO
+.RE
+.PP
+The address is taken as the text up to the first space, and the path as the
+second token inside the quoted request.
+.SH OPTIONS
+.TP
+.BI \-f " file"
+Log file to analyze. Required. The file must be a regular file.
+.TP
+.BI \-p " pattern"
+Count only lines containing the given substring.
+.TP
+.BI \-l " level"
+Count only lines of the given level: ERROR, WARN, INFO or DEBUG. The
+comparison is case insensitive.
+.TP
+.BI \-t " n"
+Report the
+.I n
+most frequent keys. Must be a positive number. Defaults to 5.
+.TP
+.BI \-k " field"
+Field to rank, either
+.B ip
+or
+.BR path .
+Defaults to
+.BR ip .
+.TP
+.B \-c
+Comparison mode. After the analysis, count the lines twice, once over the
+mapping and once through ordinary
+.BR read (2)
+calls, and print both elapsed times. Both passes do the same work, so the
+comparison is a fair one.
+.TP
+.B \-v
+Verbose. Print the mapped size, the system page size and the number of pages
+mapped.
+.TP
+.B \-h
+Print a usage summary and exit successfully.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Usage error, or the file could not be opened, stat'ed or mapped.
+.TP
+.B 130
+Interrupted by SIGINT. Partial statistics are printed before returning.
+.SH SIGNALS
+.TP
+.B SIGINT
+Sets a flag that the scan loop checks every 100000 lines. The scan stops at
+the next check, partial statistics are printed, the mapping is released and
+130 is returned. The previous SIGINT disposition is restored before
+returning, so the enclosing shell keeps its own handling.
+.SH EXAMPLES
+.TP
+.B loganalyzer \-f /var/log/access.log
+Print the standard summary.
+.TP
+.B loganalyzer \-f big.log \-l ERROR \-t 10 \-k path
+Show the ten paths that produced the most errors.
+.TP
+.B loganalyzer \-f big.log \-c \-v
+Compare mapped and read-based scanning, with mapping details.
+.SH BUGS
+At most 8192 distinct keys are tracked when ranking, and keys are truncated
+to 63 characters. Lines whose key does not fit in the table are still counted
+in the totals, and their number is reported, but they are not ranked.
+.SH SEE ALSO
+.BR mmap (2),
+.BR madvise (2),
+.BR munmap (2),
+.BR sigaction (2),
+.BR memchr (3),
+.BR getopt (3)
+.SH AUTHOR
+Yeasin Arafat Riyad, Group 6, Operating System I.
