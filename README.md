@@ -10,7 +10,7 @@ into one program called `customshell`.
 | Command | System calls | Owner | Status |
 | --- | --- | --- | --- |
 | loganalyzer | `mmap`, `madvise`, `memchr` | Yeasin | done, tested |
-| | | | |
+| processgroup | `fork`, `execvp`, `setpgid`, `killpg`, `sigaction`, `pipe`, `nanosleep`, `/proc` reads | Sufyaan | tested and pushed |
 | | | | |
 | | | | |
 | customshell (merge) | `fork`, `exec` | | |
