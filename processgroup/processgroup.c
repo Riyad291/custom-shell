@@ -4,26 +4,6 @@
  *
  * processgroup: manage a BATCH of processes as one unit.
  *
- *   start      launch N copies of a command (or every command listed in a
- *              file) inside ONE new process group and print the group id
- *   status     list the members of a group with state, CPU time and memory
- *   monitor    refresh that table every few seconds (adds %CPU) until the
- *              group exits or the user presses Ctrl+C
- *   signal     send one signal to every member at once (killpg)
- *   terminate  SIGTERM the whole group, then SIGKILL whatever is left
- *
- * The process group id (PGID) is the handle for a batch, so no state file is
- * needed: every later command finds the members by scanning /proc.
- *
- * System calls and library functions used:
- *   fork, execvp, setpgid, getpgrp, getpgid   - create and place processes
- *   killpg                                    - collective signal sending
- *   pipe, fcntl (FD_CLOEXEC), read, write     - child reports exec failure
- *   sigaction                                 - graceful Ctrl+C handling
- *   opendir/readdir, fopen on /proc/<pid>/... - resource monitoring
- *   getopt                                    - argument parsing
- *   nanosleep, clock_gettime                  - timing
- *
  * Build (standalone):
  *   gcc -Wall -Wextra -O2 -o processgroup processgroup.c
  * Build (linked into the Custom Shell; the shell calls processgroup_main):
