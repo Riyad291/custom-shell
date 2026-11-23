@@ -1,0 +1,346 @@
+.TH PROCESSGROUP 1 "November 2026" "Custom Shell" "User Commands"
+.SH NAME
+processgroup \- launch, monitor and control a batch of processes as one unit
+.SH SYNOPSIS
+.B processgroup start
+.RB [ \-q ]
+.RB [ \-d ]
+.RB [ \-n
+.IR N ]
+.RB [ \-\- ]
+.I COMMAND
+.RI [ ARG ...]
+.br
+.B processgroup start
+.RB [ \-q ]
+.RB [ \-d ]
+.B \-f
+.I FILE
+.br
+.B processgroup status
+.I PGID
+.br
+.B processgroup monitor
+.RB [ \-i
+.IR SECS ]
+.RB [ \-c
+.IR COUNT ]
+.I PGID
+.br
+.B processgroup signal
+.I PGID SIGNAL
+.br
+.B processgroup terminate
+.RB [ \-w
+.IR SECS ]
+.I PGID
+.br
+.B processgroup help
+.SH DESCRIPTION
+.B processgroup
+manages a batch of related processes as a single unit.
+It places every process of the batch in one new process group, so the whole
+batch can be inspected, signalled or shut down with one command instead of
+one command per process.
+.PP
+The process group ID (PGID) is the handle for a batch.
+.B start
+prints it, and every other subcommand takes it as an argument.
+No state file is kept: members are found by scanning
+.IR /proc ,
+so the commands work from any shell or terminal, and even after the program
+that started the batch has exited.
+.SH COMMANDS
+.TP
+.B start
+Launch processes in a new process group and print the group ID.
+The first process becomes the group leader.
+All commands are checked (searched for in
+.BR PATH )
+before anything is started; if one cannot be found or executed the whole
+batch is refused and nothing is launched.
+Each process starts with default signal handling and with standard input
+connected to
+.IR /dev/null .
+The processes keep running after
+.B processgroup
+exits.
+.TP
+.B status
+Print one table of every process in the group:
+process ID, parent ID, state (running, sleeping, stopped, zombie, ...),
+CPU time in seconds, resident memory in kilobytes, thread count and the
+command line, followed by totals.
+.TP
+.B monitor
+Print the same table repeatedly and add a
+.B %CPU
+column computed from the CPU time used since the previous sample.
+Monitoring ends when the group has no processes left, when
+.I COUNT
+samples have been shown, or when the user presses Ctrl+C.
+Interrupting
+.B monitor
+never affects the monitored group.
+.TP
+.B signal
+Send one signal to every process in the group with a single
+.BR killpg (2)
+call.
+.TP
+.B terminate
+Shut the group down politely, then forcefully.
+.B SIGTERM
+is sent to the group, followed by
+.B SIGCONT
+so that stopped processes wake up and can act on it.
+Every 100 ms the group is checked; when no live process remains the command
+succeeds.
+If processes are still alive after the wait time,
+.B SIGKILL
+is sent to the group.
+The result reports how many processes exited on
+.B SIGTERM
+and how many needed
+.BR SIGKILL .
+.TP
+.B help
+Print a command summary.
+.SH OPTIONS
+.SS start
+.TP
+.BI \-n " N"
+Run
+.I N
+copies of
+.I COMMAND
+(1 to 1000, default 1).
+Cannot be combined with
+.BR \-f .
+.TP
+.BI \-f " FILE"
+Run every command listed in
+.IR FILE ,
+one process per line (see
+.BR "BATCH FILE FORMAT" ).
+Cannot be combined with
+.B \-n
+or a command on the command line.
+.TP
+.B \-q
+Quiet: print only the group ID, so that it can be captured in a script.
+.TP
+.B \-d
+Discard the standard output and standard error of the started processes.
+Without it the processes keep the caller's output open, which makes a shell
+construct such as
+.B PGID=$(processgroup start \-q ...)
+wait until all of them have finished.
+Use
+.B \-qd
+together when capturing the group ID.
+.TP
+.B \-h
+Show help for
+.BR start .
+.PP
+Use
+.B \-\-
+to end option parsing when
+.I COMMAND
+itself begins with a dash.
+.SS monitor
+.TP
+.BI \-i " SECS"
+Seconds between samples, from 0.1 to 3600 (default 1).
+.TP
+.BI \-c " COUNT"
+Stop after
+.I COUNT
+samples (default: run until the group ends or Ctrl+C).
+.SS terminate
+.TP
+.BI \-w " SECS"
+Seconds to wait after
+.B SIGTERM
+before sending
+.B SIGKILL
+(0 to 3600, default 5).
+.PP
+Each subcommand also accepts
+.BR \-h .
+.SH SIGNALS
+The
+.I SIGNAL
+argument of
+.B signal
+may be written with or without the
+.B SIG
+prefix and in any letter case, or as a number from 0 to 64.
+Recognised names:
+.BR HUP ,
+.BR INT ,
+.BR QUIT ,
+.BR KILL ,
+.BR TERM ,
+.BR STOP ,
+.BR CONT ,
+.BR TSTP ,
+.BR USR1 ,
+.BR USR2
+and
+.BR ALRM .
+Signal 0 sends nothing and only tests that the group exists and may be
+signalled.
+.PP
+.B processgroup
+itself catches
+.B SIGINT
+and
+.B SIGTERM
+while running
+.B monitor
+and
+.BR terminate ,
+so that it can stop cleanly instead of being killed in the middle of its work.
+.SH BATCH FILE FORMAT
+A file given to
+.B start \-f
+contains one command per line.
+Arguments are separated by white space.
+Blank lines and lines whose first non-blank character is
+.B #
+are ignored.
+There is no quoting or shell expansion.
+Limits: 1000 commands per file, 64 words per command, 1023 characters per
+line.
+.PP
+Example file:
+.PP
+.RS
+.nf
+# two sleeps and a compile
+sleep 60
+sleep 90
+gcc \-O2 \-o /tmp/a.out prog.c
+.fi
+.RE
+.SH SAFETY
+.B signal
+and
+.B terminate
+refuse to act on group 1 or lower, on the process group of
+.B processgroup
+itself, and on the process group of the shell that started it.
+This prevents the batch tools from taking down the system or the user's
+own terminal session.
+Signals can only be sent to groups the user is permitted to signal;
+.BR EPERM
+and
+.BR ESRCH
+errors are reported with an explanatory message.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+A runtime error: command not found, group not found or empty, a refused
+target, a failed system call, or processes that could not be terminated.
+.TP
+.B 2
+A usage error: unknown subcommand or option, missing or invalid argument.
+.SH EXAMPLES
+Start five copies of a long-running command and note the group ID:
+.PP
+.RS
+.nf
+$ processgroup start \-n 5 \-\- sleep 300
+Started 5 process(es) in process group 4821.
+.fi
+.RE
+.PP
+Show the group, then watch its CPU use every two seconds, ten times:
+.PP
+.RS
+.nf
+$ processgroup status 4821
+$ processgroup monitor \-i 2 \-c 10 4821
+.fi
+.RE
+.PP
+Pause every process at once, then resume them:
+.PP
+.RS
+.nf
+$ processgroup signal 4821 STOP
+$ processgroup signal 4821 CONT
+.fi
+.RE
+.PP
+Shut the group down, allowing 3 seconds before
+.BR SIGKILL :
+.PP
+.RS
+.nf
+$ processgroup terminate \-w 3 4821
+Group 4821 terminated: 5 exited on SIGTERM, 0 needed SIGKILL.
+.fi
+.RE
+.PP
+Capture the group ID in a script:
+.PP
+.RS
+.nf
+GID=$(processgroup start \-qd \-n 3 \-\- ./worker)
+processgroup monitor \-c 5 "$GID"
+processgroup terminate "$GID"
+.fi
+.RE
+.SH NOTES FOR THE CUSTOM SHELL
+The command is implemented by the function
+.B int processgroup_main(int argc, char *argv[])
+in
+.IR processgroup.c .
+The shell calls it with
+.I argv[0]
+set to the command name,
+.I argv[1]
+the subcommand, and
+.I argv
+terminated by a null pointer.
+Compile with
+.B \-DPROCESSGROUP_NO_MAIN
+to leave out the stand-alone
+.BR main ()
+when linking into the shell.
+Option parsing with
+.BR getopt (3)
+resets
+.B optind
+before every parse, so the shell's own use of
+.BR getopt (3)
+is not disturbed.
+.SH FILES
+.TP
+.I /proc/<pid>/stat
+State, parent, process group, CPU time, thread count and resident pages.
+.TP
+.I /proc/<pid>/cmdline
+Command line shown in the tables.
+.SH BUGS
+Resource monitoring requires a Linux
+.BR proc (5)
+file system.
+Process groups can be changed by the processes themselves
+.RB ( setpgid (2));
+a process that moves to another group is no longer part of the batch.
+.SH SEE ALSO
+.BR setpgid (2),
+.BR killpg (2),
+.BR kill (2),
+.BR sigaction (2),
+.BR waitpid (2),
+.BR getopt (3),
+.BR proc (5),
+.BR signal (7)
